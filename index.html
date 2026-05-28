@@ -155,6 +155,10 @@
   .bar-loader span:nth-child(2) { height: 10px; animation-delay: 0.18s; }
   .bar-loader span:nth-child(3) { height: 6px;  animation-delay: 0.36s; }
   @keyframes barFade { 0%,100%{opacity:0.2} 50%{opacity:1} }
+  .qi-status .done-msg {
+    animation: doneFadeOut 0.6s ease 1.8s forwards;
+  }
+  @keyframes doneFadeOut { from{opacity:1} to{opacity:0; visibility:hidden} }
 
   /* Transcript */
   .transcript-box {
@@ -218,6 +222,80 @@
   .btn-primary:hover { background: rgba(184,169,255,0.2); border-color: var(--accent); }
   .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  /* ── Structured summary card ── */
+  .summary-card {
+    background: linear-gradient(160deg, var(--surface) 0%, var(--surface2) 100%);
+    border: 1px solid var(--border-glow);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.4s ease;
+  }
+  .summary-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+  .summary-card.error { color: var(--red); border-color: rgba(224,112,112,0.3); }
+
+  .summary-eyebrow {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--accent-dim); margin-bottom: 6px;
+  }
+  .summary-mood {
+    font-family: 'Playfair Display', serif; font-style: italic;
+    font-size: 1.6rem; color: var(--text); line-height: 1.2;
+    margin-bottom: 18px; text-transform: capitalize;
+  }
+  .summary-narrative {
+    font-size: 15px; line-height: 1.85; color: var(--text-dim);
+    margin-bottom: 22px;
+  }
+  .summary-section { margin-top: 20px; }
+  .summary-section-label {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text-muted); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .theme-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .theme-chip {
+    background: var(--accent-glow); border: 1px solid var(--accent-dim);
+    color: var(--accent); border-radius: 99px; padding: 4px 13px;
+    font-size: 12px; font-family: 'DM Sans', sans-serif;
+  }
+  .action-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .action-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13.5px; line-height: 1.6; color: var(--text-dim);
+    padding: 10px 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 9px;
+  }
+  .action-item::before {
+    content: '○'; color: var(--accent-dim); font-size: 14px;
+    flex-shrink: 0; line-height: 1.5;
+  }
+  .summary-reflection {
+    margin-top: 22px; padding: 16px 18px;
+    background: var(--accent-glow);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    font-family: 'Playfair Display', serif; font-style: italic;
+    font-size: 14.5px; line-height: 1.7; color: var(--text);
+  }
+  .summary-divider { height: 1px; background: var(--border); margin: 22px 0; border: none; }
+  .summary-actions-row { margin-top: 22px; display: flex; gap: 8px; }
+  .summary-loading {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-muted); font-size: 13px;
+    font-family: 'DM Mono', monospace; padding: 8px 0;
+  }
+
+  /* legacy fallback box (prose mode) */
   .week-summary-box {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 24px; margin-bottom: 24px;
@@ -259,7 +337,7 @@
     font-size: 11px;
     color: var(--accent-dim);
     margin-top: 3px;
-  } font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 12px; }
+  }
 
   /* Notification toast */
   .toast {
@@ -268,9 +346,10 @@
     border-radius: var(--radius); padding: 12px 18px;
     font-size: 13px; color: var(--text); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     transform: translateY(8px); opacity: 0;
-    transition: opacity 0.4s ease, transform 0.3s ease; pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.3s ease;
+    pointer-events: none;
   }
-  .toast.show { transform: none; opacity: 1; }
+  .toast[data-state="visible"] { transform: none; opacity: 1; }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
@@ -355,7 +434,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" data-state="hidden"></div>
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -376,12 +455,17 @@ function copyWeekSummary() {
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
-function toast(msg, duration = 2000) {
+function toast(msg, duration = 2500) {
   const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.classList.add("show");
   clearTimeout(el._toastTimer);
-  el._toastTimer = setTimeout(() => el.classList.remove("show"), duration);
+  el.textContent = msg;
+  // Force reflow so re-triggering the transition works even mid-fade
+  el.setAttribute("data-state", "hidden");
+  void el.offsetWidth;
+  el.setAttribute("data-state", "visible");
+  el._toastTimer = setTimeout(() => {
+    el.setAttribute("data-state", "hidden");
+  }, duration);
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
@@ -472,7 +556,7 @@ async function uploadAndTranscribe(file) {
     }
 
     const text = data.text || "(no speech detected)";
-    el.querySelector(".qi-status").innerHTML = `<span style="color:var(--green)">✓ done</span>`;
+    el.querySelector(".qi-status").innerHTML = `<span class="done-msg" style="color:var(--green)">✓ done</span>`;
 
     const entry = {
       id: id,
@@ -534,7 +618,6 @@ async function summariseEntry(id) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
 
-  // Find button — works for both queue items and history cards
   const btn = document.querySelector(`[data-summarise-id="${id}"]`);
   if (btn) { btn.disabled = true; btn.textContent = "…"; }
 
@@ -545,8 +628,13 @@ async function summariseEntry(id) {
       body: JSON.stringify({ entries: [entry.text], mode: "entry" })
     });
     const data = await resp.json();
-    if (data.response) {
-      entry.summary = data.response;
+
+    if (data.structured || data.response) {
+      // Store both a structured object (for rendering) and text (for copying)
+      entry.summaryData = data.structured || null;
+      entry.summary = data.structured
+        ? structuredToText(data.structured, "entry")
+        : data.response;
       saveEntries();
 
       // Update queue item if present
@@ -555,21 +643,21 @@ async function summariseEntry(id) {
         let sumEl = qiEl.querySelector(".summary-inline");
         if (!sumEl) {
           sumEl = document.createElement("div");
-          sumEl.className = "transcript-box summary-inline";
-          sumEl.style.borderColor = "var(--accent-dim)";
-          sumEl.style.borderLeftWidth = "3px";
+          sumEl.className = "summary-inline";
           sumEl.style.gridColumn = "1 / -1";
+          sumEl.style.marginTop = "10px";
           qiEl.insertAdjacentElement("beforeend", sumEl);
         }
-        sumEl.textContent = data.response;
+        sumEl.innerHTML = data.structured
+          ? renderEntrySummary(data.structured)
+          : `<div class="entry-summary-block"><div class="entry-summary-text">${escHtml(data.response)}</div></div>`;
       }
 
-      // Re-render history/week cards so summary shows inline there too
       const activeTab = document.querySelector(".tab.active")?.dataset.tab;
       if (activeTab === "history") renderHistory();
       if (activeTab === "week") renderWeek();
 
-      toast("Summary ready");
+      toast("Summary ready ✦");
     } else if (data.error) {
       toast("Summarise failed: " + data.error);
     }
@@ -578,6 +666,21 @@ async function summariseEntry(id) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "✦ Summarise"; }
   }
+}
+
+function renderEntrySummary(s) {
+  const themes = (s.themes || []).map(t =>
+    `<span class="theme-chip">${escHtml(t)}</span>`).join("");
+  const actions = (s.actions || []).map(a =>
+    `<li class="action-item">${escHtml(a)}</li>`).join("");
+
+  return `
+    <div class="summary-card" style="padding:20px;margin-bottom:0">
+      <div class="summary-eyebrow">In a nutshell...</div>
+      ${s.cleaned ? `<div class="summary-narrative" style="margin-bottom:${(themes||actions)?'18px':'0'}">${escHtml(s.cleaned)}</div>` : ""}
+      ${themes ? `<div class="summary-section" style="margin-top:0"><div class="summary-section-label">✦ Themes</div><div class="theme-chips">${themes}</div></div>` : ""}
+      ${actions ? `<div class="summary-section"><div class="summary-section-label">→ Action items</div><ul class="action-list">${actions}</ul></div>` : ""}
+    </div>`;
 }
 
 function copyText(id) {
@@ -621,7 +724,9 @@ function entryCardHTML(e) {
       </div>
       <div class="entry-body">
         <div class="entry-text">${escHtml(e.text)}</div>
-        ${e.summary ? `<div class="entry-summary-block"><div class="entry-summary-label">✦ Summary</div><div class="entry-summary-text">${escHtml(e.summary)}</div></div>` : ""}
+        ${e.summaryData
+          ? `<div style="margin-top:14px">${renderEntrySummary(e.summaryData)}</div>`
+          : (e.summary ? `<div class="entry-summary-block"><div class="entry-summary-label">✦ Summary</div><div class="entry-summary-text">${escHtml(e.summary)}</div></div>` : "")}
         <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn-small" onclick="copyEntryText('${e.id}')">⎘ Copy transcript</button>
@@ -664,7 +769,7 @@ function renderWeek() {
   const { monday, sunday } = getWeekRange(weekOffset);
   const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   document.getElementById("week-label").textContent =
-    weekOffset === 0 ? "This week" : `${fmt(monday)} – ${fmt(sunday)}`;
+    weekOffset === 0 ? `This week · ${fmt(monday)} – ${fmt(sunday)}` : `${fmt(monday)} – ${fmt(sunday)}`;
 
   const week = entries.filter(e => {
     const d = new Date(e.date);
@@ -696,10 +801,10 @@ document.getElementById("btn-summarize").addEventListener("click", async () => {
   if (!week.length) { toast("No entries this week to summarise."); return; }
 
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="border-top-color:var(--accent)"></div> Thinking…`;
+  btn.innerHTML = `<div class="bar-loader"><span></span><span></span><span></span></div> Thinking…`;
 
   const container = document.getElementById("week-summary-container");
-  container.innerHTML = `<div class="week-summary-box"><h3>Weekly Summary</h3><div style="color:var(--text-muted);font-size:13px">Ollama is thinking… this may take a moment.</div></div>`;
+  container.innerHTML = `<div class="summary-card"><div class="summary-loading"><div class="bar-loader"><span></span><span></span><span></span></div> Reflecting on your week…</div></div>`;
 
   try {
     const resp = await fetch(`${SERVER}/summarize`, {
@@ -708,26 +813,78 @@ document.getElementById("btn-summarize").addEventListener("click", async () => {
       body: JSON.stringify({ entries: week, mode: "week" })
     });
     const data = await resp.json();
-    if (data.response) {
+
+    if (data.structured) {
+      _lastWeekSummary = structuredToText(data.structured, "week");
+      container.innerHTML = renderWeekSummary(data.structured);
+      toast("Week summarised ✦");
+    } else if (data.response) {
       _lastWeekSummary = data.response;
-      container.innerHTML = `<div class="week-summary-box">
-        <h3>Weekly Summary</h3>
-        <div>${escHtml(data.response)}</div>
-        <div style="margin-top:16px">
-          <button class="btn-small" onclick="copyWeekSummary()">⎘ Copy summary</button>
-        </div>
-      </div>`;
+      container.innerHTML = `<div class="summary-card"><div class="summary-eyebrow">Weekly Reflection</div><div class="summary-narrative">${escHtml(data.response)}</div><div class="summary-actions-row"><button class="btn-small" onclick="copyWeekSummary()">⎘ Copy</button></div></div>`;
       toast("Week summarised ✦");
     } else {
-      container.innerHTML = `<div class="week-summary-box" style="color:var(--red)">${escHtml(data.error || "Unknown error")}</div>`;
+      container.innerHTML = `<div class="summary-card error">⚠ ${escHtml(data.error || "The model didn't return a summary. Try clicking Summarise week again.")}</div>`;
+      toast("Summary failed");
     }
   } catch(e) {
-    container.innerHTML = `<div class="week-summary-box" style="color:var(--red)">Failed: ${escHtml(e.message)}</div>`;
+    container.innerHTML = `<div class="summary-card error">⚠ Could not reach the server. Is server.py running?<br><span style="font-size:12px;opacity:0.7">${escHtml(e.message)}</span></div>`;
+    toast("Summary failed");
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<span>✦</span> Summarise week`;
   }
 });
+
+// ─── Structured summary rendering ───────────────────────────────────────────────
+function renderWeekSummary(s) {
+  const themes = (s.themes || []).map(t =>
+    `<span class="theme-chip">${escHtml(t)}</span>`).join("");
+  const actions = (s.actions || []).map(a =>
+    `<li class="action-item">${escHtml(a)}</li>`).join("");
+
+  return `
+    <div class="summary-card">
+      <div class="summary-eyebrow">Weekly Reflection</div>
+      ${s.mood ? `<div class="summary-mood">${escHtml(s.mood)}</div>` : ""}
+      ${s.narrative ? `<div class="summary-narrative">${escHtml(s.narrative)}</div>` : ""}
+
+      ${themes ? `
+        <div class="summary-section">
+          <div class="summary-section-label">✦ Themes</div>
+          <div class="theme-chips">${themes}</div>
+        </div>` : ""}
+
+      ${actions ? `
+        <div class="summary-section">
+          <div class="summary-section-label">→ Intentions & action items</div>
+          <ul class="action-list">${actions}</ul>
+        </div>` : ""}
+
+      ${s.reflection ? `<div class="summary-reflection">${escHtml(s.reflection)}</div>` : ""}
+
+      <div class="summary-actions-row">
+        <button class="btn-small" onclick="copyWeekSummary()">⎘ Copy summary</button>
+      </div>
+    </div>`;
+}
+
+function structuredToText(s, mode) {
+  if (mode === "week") {
+    let out = "";
+    if (s.mood) out += `Mood: ${s.mood}\n\n`;
+    if (s.narrative) out += `${s.narrative}\n\n`;
+    if (s.themes?.length) out += `Themes: ${s.themes.join(", ")}\n\n`;
+    if (s.actions?.length) out += `Action items:\n${s.actions.map(a => "- " + a).join("\n")}\n\n`;
+    if (s.reflection) out += `${s.reflection}`;
+    return out.trim();
+  } else {
+    let out = "";
+    if (s.cleaned) out += `${s.cleaned}\n\n`;
+    if (s.themes?.length) out += `Themes: ${s.themes.join(", ")}\n`;
+    if (s.actions?.length) out += `Action items:\n${s.actions.map(a => "- " + a).join("\n")}`;
+    return out.trim();
+  }
+}
 
 // ─── Util ─────────────────────────────────────────────────────────────────────
 function escHtml(s) {

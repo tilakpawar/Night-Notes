@@ -376,35 +376,78 @@ class Handler(BaseHTTPRequestHandler):
                 mode    = payload.get("mode", "week")
 
                 if mode == "entry":
+                    note = entries[0] if entries else ""
                     prompt = (
-                        "You are a personal journal assistant.\n"
-                        "Below is a transcribed voice note. Provide:\n"
-                        "1. A cleaned-up version (remove filler words, fix grammar)\n"
-                        "2. Key themes or action items (if any)\n\n"
-                        f"Voice note:\n{entries[0] if entries else ''}"
+                        "You are a warm, perceptive journal assistant. Read this voice note "
+                        "and return ONLY a JSON object — no markdown, no backticks, no preamble.\n\n"
+                        "Fields:\n"
+                        '- "cleaned": the note rewritten in clean first-person prose (remove '
+                        'filler words and false starts, fix grammar, keep the speaker\'s voice and meaning)\n'
+                        '- "themes": array of 1-4 short theme phrases (2-4 words each), or []\n'
+                        '- "actions": array of action items or intentions mentioned, or []\n\n'
+                        f"Voice note:\n{note}\n\n"
+                        'Respond with ONLY valid JSON like: '
+                        '{"In a nutshell...": "...", "themes": ["work stress", "gratitude"], "actions": ["call mom"]}'
                     )
-                    num_predict = 400
+                    num_predict = 500
                 else:
                     joined = "\n\n".join(
-                        f"[{e.get('date','?')}] {e.get('text','')}" for e in entries
+                        f"[{e.get('dateStr') or e.get('date','?')}] {e.get('text','')}"
+                        for e in entries
                     )
                     prompt = (
-                        "You are a personal journal assistant.\n"
-                        "These are voice journal entries from this week. Provide:\n"
-                        "1. A brief narrative summary (2-3 sentences)\n"
-                        "2. Recurring themes or patterns\n"
-                        "3. Action items or intentions mentioned\n"
-                        "4. One encouraging reflection\n\n"
-                        f"Entries:\n{joined}"
+                        "You are a warm, perceptive journal assistant. Read these voice journal "
+                        "entries from one week and return ONLY a JSON object — no markdown, no "
+                        "backticks, no preamble.\n\n"
+                        "Fields:\n"
+                        '- "narrative": a flowing 2-3 sentence reflection on how the week went\n'
+                        '- "themes": array of 2-5 recurring theme phrases (2-4 words each)\n'
+                        '- "actions": array of action items or intentions mentioned across the week, or []\n'
+                        '- "mood": one or two words capturing the overall emotional tone of the week\n'
+                        '- "reflection": one warm, encouraging sentence addressed to the writer\n\n'
+                        f"Entries:\n{joined}\n\n"
+                        'Respond with ONLY valid JSON like: '
+                        '{"narrative": "...", "themes": ["..."], "actions": ["..."], '
+                        '"mood": "hopeful", "reflection": "..."}'
                     )
-                    num_predict = 600
+                    num_predict = 700
 
-                self.send_json(ollama_request({
+                result = ollama_request({
                     "model": OLLAMA_MODEL,
                     "prompt": prompt,
                     "stream": True,
-                    "options": {"num_predict": num_predict},
-                }))
+                    "options": {"temperature": 0.5, "num_predict": num_predict},
+                }, timeout=300)   # 14B models can be slow — allow up to 5 min
+
+                # Handle Ollama errors explicitly
+                if "error" in result:
+                    self.send_json({"error": result["error"]}, 502)
+                    return
+
+                raw = (result.get("response") or "").strip()
+                if not raw:
+                    self.send_json({"error": "Model returned an empty response. Try again."}, 502)
+                    return
+
+                # Try hard to extract JSON: strip fences, then grab the {...} block
+                cleaned = raw.replace("```json", "").replace("```", "").strip()
+                structured = None
+                try:
+                    structured = json.loads(cleaned)
+                except Exception:
+                    # Find the first {...} block in the text (handles prose wrapping)
+                    match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+                    if match:
+                        try:
+                            structured = json.loads(match.group(0))
+                        except Exception:
+                            structured = None
+
+                if isinstance(structured, dict):
+                    self.send_json({"structured": structured, "mode": mode})
+                else:
+                    # Couldn't parse JSON — return the prose so the UI still shows something
+                    self.send_json({"response": raw, "mode": mode})
             except Exception as e:
                 self.send_json({"error": str(e)}, 500)
         else:
