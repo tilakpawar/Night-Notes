@@ -487,7 +487,7 @@ async function uploadAndTranscribe(file) {
     el.insertAdjacentHTML("beforeend", `<div class="transcript-box">${escHtml(text)}</div>`);
     el.insertAdjacentHTML("beforeend", `
       <div class="qi-actions">
-        <button class="btn-small" onclick="summariseEntry('${id}')">✦ Summarise</button>
+        <button class="btn-small" data-summarise-id="${id}" onclick="summariseEntry('${id}')">✦ Summarise</button>
         <button class="btn-small copy-btn" onclick="copyText('${id}')">⎘ Copy</button>
         <button class="btn-small danger" onclick="deleteQueueItem('${id}')">✕ Remove</button>
       </div>
@@ -523,8 +523,8 @@ async function summariseEntry(id) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
 
-  // Find button and show loading
-  const btn = document.querySelector(`[onclick="summariseEntry('${id}')"]`);
+  // Find button — works for both queue items and history cards
+  const btn = document.querySelector(`[data-summarise-id="${id}"]`);
   if (btn) { btn.disabled = true; btn.textContent = "…"; }
 
   try {
@@ -537,7 +537,8 @@ async function summariseEntry(id) {
     if (data.response) {
       entry.summary = data.response;
       saveEntries();
-      // Show inline
+
+      // Update queue item if present
       const qiEl = document.getElementById(id);
       if (qiEl) {
         let sumEl = qiEl.querySelector(".summary-inline");
@@ -551,7 +552,15 @@ async function summariseEntry(id) {
         }
         sumEl.textContent = data.response;
       }
+
+      // Re-render history/week cards so summary shows inline there too
+      const activeTab = document.querySelector(".tab.active")?.dataset.tab;
+      if (activeTab === "history") renderHistory();
+      if (activeTab === "week") renderWeek();
+
       toast("Summary ready");
+    } else if (data.error) {
+      toast("Summarise failed: " + data.error);
     }
   } catch(e) {
     toast("Summarise failed: " + e.message);
@@ -602,9 +611,12 @@ function entryCardHTML(e) {
       <div class="entry-body">
         <div class="entry-text">${escHtml(e.text)}</div>
         ${e.summary ? `<div class="entry-summary-block"><div class="entry-summary-label">✦ Summary</div><div class="entry-summary-text">${escHtml(e.summary)}</div></div>` : ""}
-        <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn-small" onclick="navigator.clipboard.writeText(${JSON.stringify(e.text)});toast('Copied')">⎘ Copy transcript</button>
-          ${!e.summary ? `<button class="btn-small" onclick="summariseAndRefresh('${e.id}')">✦ Summarise</button>` : ""}
+        <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-small" onclick="navigator.clipboard.writeText(${JSON.stringify(e.text)});toast('Copied')">⎘ Copy transcript</button>
+            ${!e.summary ? `<button class="btn-small" data-summarise-id="${e.id}" onclick="summariseAndRefresh('${e.id}')">✦ Summarise</button>` : ""}
+          </div>
+          <button class="btn-small danger" onclick="deleteEntry('${e.id}')">✕ Delete</button>
         </div>
       </div>
     </div>`;
@@ -612,9 +624,16 @@ function entryCardHTML(e) {
 
 async function summariseAndRefresh(id) {
   await summariseEntry(id);
+}
+
+function deleteEntry(id) {
+  if (!confirm("Delete this entry? This can't be undone.")) return;
+  entries = entries.filter(e => e.id !== id);
+  saveEntries();
   const tab = document.querySelector(".tab.active");
   if (tab?.dataset.tab === "history") renderHistory();
   if (tab?.dataset.tab === "week") renderWeek();
+  toast("Entry deleted");
 }
 
 // ─── Week view ────────────────────────────────────────────────────────────────

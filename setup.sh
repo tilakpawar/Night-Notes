@@ -65,7 +65,7 @@ else
   warn "Ollama not found."
   echo ""
   echo -e "  Install it from ${CYAN}https://ollama.com/download${RESET}"
-  echo "  Then run:  ollama pull qwen2.5:7b"
+  echo "  Then run:  ollama pull qwen2.5:14b"
   echo "  Then re-run this script."
   echo ""
   OLLAMA_MISSING=1
@@ -84,9 +84,9 @@ if [ -z "$OLLAMA_MISSING" ]; then
       sed -i.bak "s/^OLLAMA_MODEL = .*/OLLAMA_MODEL = \"$QWEN_MODEL\"/" server.py && rm -f server.py.bak
       ok "Updated server.py → OLLAMA_MODEL = \"$QWEN_MODEL\""
     else
-      warn "No Qwen model found. Pulling qwen2.5:7b..."
-      ollama pull qwen2.5:7b && ok "qwen2.5:7b ready" || warn "Pull failed — run: ollama pull qwen2.5:7b"
-      sed -i.bak "s/^OLLAMA_MODEL = .*/OLLAMA_MODEL = \"qwen2.5:7b\"/" server.py && rm -f server.py.bak
+      warn "No Qwen model found. Pulling qwen2.5:14b..."
+      ollama pull qwen2.5:14b && ok "qwen2.5:14b ready" || warn "Pull failed — run: ollama pull qwen2.5:14b"
+      sed -i.bak "s/^OLLAMA_MODEL = .*/OLLAMA_MODEL = \"qwen2.5:14b\"/" server.py && rm -f server.py.bak
     fi
   else
     warn "Ollama installed but not running."

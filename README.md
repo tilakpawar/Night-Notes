@@ -82,7 +82,7 @@ Edit the top of `server.py`:
 
 ```python
 PORT         = 8765          # port the server runs on
-OLLAMA_MODEL = "qwen3.7"     # auto-set by setup.sh; change to any `ollama list` model
+OLLAMA_MODEL = "qwen2.5:14b"     # auto-set by setup.sh; change to any `ollama list` model
 ```
 
 To use a smaller/faster Whisper model (less accurate but quicker):
