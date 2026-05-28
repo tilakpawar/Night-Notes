@@ -159,6 +159,7 @@
     animation: doneFadeOut 0.6s ease 1.8s forwards;
   }
   @keyframes doneFadeOut { from{opacity:1} to{opacity:0; visibility:hidden} }
+  .qi-status .waiting-msg { color: var(--text-muted); opacity: 0.7; }
 
   /* Transcript */
   .transcript-box {
@@ -519,10 +520,16 @@ fi.addEventListener("change", () => { handleFiles([...fi.files]); fi.value = "";
 function handleFiles(files) {
   const audio = files.filter(f => f.type.startsWith("audio/") || /\.(m4a|mp3|wav|ogg|flac|aac|webm|opus)$/i.test(f.name));
   if (!audio.length) { toast("No audio files found."); return; }
-  audio.forEach(uploadAndTranscribe);
+  audio.forEach(enqueueFile);
+  if (audio.length > 1) toast(`Queued ${audio.length} files`);
+  processQueue();
 }
 
-async function uploadAndTranscribe(file) {
+// ─── Sequential transcription queue ─────────────────────────────────────────────
+const _queue = [];          // pending { file, id, el }
+let _processing = false;    // worker lock
+
+function enqueueFile(file) {
   const id = `qi-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
   const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   const timeStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
@@ -537,10 +544,28 @@ async function uploadAndTranscribe(file) {
       <div class="qi-title-slot"></div>
     </div>
     <div class="qi-status">
-      <div class="bar-loader"><span></span><span></span><span></span></div>
+      <span class="waiting-msg">⏳ waiting…</span>
     </div>
   `;
   document.getElementById("queue").prepend(el);
+
+  _queue.push({ file, id, dateStr, timeStr });
+}
+
+async function processQueue() {
+  if (_processing) return;
+  _processing = true;
+  while (_queue.length) {
+    const job = _queue.shift();
+    await transcribeJob(job);
+  }
+  _processing = false;
+}
+
+async function transcribeJob({ file, id, dateStr, timeStr }) {
+  const el = document.getElementById(id);
+  if (!el) return; // removed while waiting
+  el.querySelector(".qi-status").innerHTML = `<div class="bar-loader"><span></span><span></span><span></span></div>`;
 
   const fd = new FormData();
   fd.append("audio", file, file.name);
@@ -589,7 +614,7 @@ async function uploadAndTranscribe(file) {
     `);
     toast("Transcribed: " + file.name.slice(0, 30));
 
-    // Fire titlize in background — non-blocking
+    // Fire titlize in background — non-blocking (lightweight, won't hold up the queue)
     fetch(`${SERVER}/titlize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -690,6 +715,8 @@ function copyText(id) {
 
 function deleteQueueItem(id) {
   entries = entries.filter(e => e.id !== id);
+  const qIdx = _queue.findIndex(j => j.id === id);
+  if (qIdx !== -1) _queue.splice(qIdx, 1);
   saveEntries();
   document.getElementById(id)?.remove();
   toast("Entry deleted");
