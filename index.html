@@ -268,7 +268,7 @@
     border-radius: var(--radius); padding: 12px 18px;
     font-size: 13px; color: var(--text); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     transform: translateY(8px); opacity: 0;
-    transition: all 0.3s; pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.3s ease; pointer-events: none;
   }
   .toast.show { transform: none; opacity: 1; }
 
@@ -361,16 +361,27 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 const SERVER = "http://localhost:8765";
 let entries = JSON.parse(localStorage.getItem("nj_entries") || "[]");
-let weekOffset = 0; // 0 = current week, -1 = last week, etc.
+let weekOffset = 0;
+let _lastWeekSummary = "";
 
 function saveEntries() { localStorage.setItem("nj_entries", JSON.stringify(entries)); }
 
+function copyEntryText(id) {
+  const entry = entries.find(e => e.id === id);
+  if (entry) { navigator.clipboard.writeText(entry.text); toast("Copied to clipboard"); }
+}
+
+function copyWeekSummary() {
+  if (_lastWeekSummary) { navigator.clipboard.writeText(_lastWeekSummary); toast("Copied to clipboard"); }
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
-function toast(msg, duration = 3000) {
+function toast(msg, duration = 2000) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), duration);
+  clearTimeout(el._toastTimer);
+  el._toastTimer = setTimeout(() => el.classList.remove("show"), duration);
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
@@ -613,7 +624,7 @@ function entryCardHTML(e) {
         ${e.summary ? `<div class="entry-summary-block"><div class="entry-summary-label">✦ Summary</div><div class="entry-summary-text">${escHtml(e.summary)}</div></div>` : ""}
         <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn-small" onclick="navigator.clipboard.writeText(${JSON.stringify(e.text)});toast('Copied')">⎘ Copy transcript</button>
+            <button class="btn-small" onclick="copyEntryText('${e.id}')">⎘ Copy transcript</button>
             ${!e.summary ? `<button class="btn-small" data-summarise-id="${e.id}" onclick="summariseAndRefresh('${e.id}')">✦ Summarise</button>` : ""}
           </div>
           <button class="btn-small danger" onclick="deleteEntry('${e.id}')">✕ Delete</button>
@@ -698,11 +709,12 @@ document.getElementById("btn-summarize").addEventListener("click", async () => {
     });
     const data = await resp.json();
     if (data.response) {
+      _lastWeekSummary = data.response;
       container.innerHTML = `<div class="week-summary-box">
         <h3>Weekly Summary</h3>
         <div>${escHtml(data.response)}</div>
         <div style="margin-top:16px">
-          <button class="btn-small" onclick="navigator.clipboard.writeText(${JSON.stringify(data.response)});toast('Copied')">⎘ Copy summary</button>
+          <button class="btn-small" onclick="copyWeekSummary()">⎘ Copy summary</button>
         </div>
       </div>`;
       toast("Week summarised ✦");
