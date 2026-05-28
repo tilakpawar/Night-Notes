@@ -1,6 +1,6 @@
 # 🎙 Night Notes
 
-**A fully local, fully private voice journal.** Drop an audio file → get a transcript, an AI-generated title, and a weekly reflection — all running on your own machine. Nothing leaves your laptop.
+**A fully local, fully private voice journal.** Drop an audio file → get a transcript, an auto-generated title, and a weekly reflection — all running on your own machine. Nothing leaves your laptop.
 
 ---
 
